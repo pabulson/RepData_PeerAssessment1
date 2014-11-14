@@ -1,25 +1,137 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Steps Analysis"
+author: "Paul Bulson"
+date: "Friday, November 14, 2014"
+output: html_document
 ---
 
+The advent of the personal activity monitoring device enables a better understanding of an individuals behaviour. For example, one individuals steps where recorded at 5-minute interval during October 2012 through November 2012. The resulting dataset is available at <https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip>.
 
-## Loading and preprocessing the data
+To better understand this data, load it into R and take advantage of its capabilities.
+
+```{r}
+# load the data
+stepsData <- read.csv("activity.csv", header=TRUE)
+
+# process the data
+stepsPerDay <- aggregate(steps ~ date, data=stepsData, sum)
+stepsPerIntervalMean <- aggregate(steps ~ interval, data=stepsData, mean)
+```
+
+Generating a histogram of the total number of steps taken each day, gives an approximately normal distribution.
+
+```{r, echo=TRUE}
+# generate histogram (graphical representation of the distribution of data) of the total number of steps taken each day
+library(ggplot2)
+plot = ggplot(data=stepsPerDay, aes(x=steps)) 
+plot = plot + geom_histogram(colour="darkgreen", fill="lightgreen", binwidth=2000)
+plot = plot + ggtitle("Frequency of the Total Number of Steps Taken Each Day")
+plot = plot + theme(plot.title = element_text(face="bold"))
+plot
+```
+
+Given the frequency distribution appears normal, one would expect the mean and median to be relatively equal.
+
+```{r, echo=TRUE}
+# calculate the mean/median total number of steps taken per day
+options(scipen=999)
+stepsPerDayMean <- round(mean(stepsPerDay$steps))
+stepsPerDaySD <- round(sd(stepsPerDay$steps))
+stepsPerDayMedian <- median(stepsPerDay$steps)
+```
+
+The mean value for steps per day is `r stepsPerDayMean` with a standard deviation of `r stepsPerDaySD`. The median value is `r stepsPerDayMedian`.
+
+Calculating the mean for each time interval provides some idea of the distribution of steps over the course of the day.
+
+```{r, echo=TRUE}
+# time series plot of the 5 minute interval (x-axis) and the average number of steps taken, averages across all days (y-axis)
+plot1 = ggplot(data=stepsPerIntervalMean, aes(interval, steps)) 
+plot1 = plot1 + geom_line(colour="blue", size=1) 
+plot1 = plot1 + ggtitle("Average Number of Steps Taken per 5-minute Interval")
+plot1 = plot1 + theme(plot.title = element_text(face="bold"))
+plot1
+```
+
+```{r, echo=TRUE}
+# calculate the 5 minute interval that on average across all the days in the dataset contains the maximum number of steps
+interalWithMostSteps <- stepsPerIntervalMean[stepsPerIntervalMean$steps==max(stepsPerIntervalMean$steps),"interval"]
+```
+
+The time interval with highest mean number of steps (that peak between 500 and 1000) is `r interalWithMostSteps`. 
+
+```{r, echo=TRUE}
+# calculate and report the total number of missing values (total number of rows with NA)
+numberOfNAs <- sum(is.na(stepsData$steps))
+```
+
+Unfortunately, the dataset contains `r numberOfNAs`. If we replace the NAs with mean for that interval, will make it a difference?
+
+```{r, echo=TRUE}
+# replace NA with time interval mean
+stepsDataMean <- read.csv("activity.csv", header=TRUE)
+for (i in 1:nrow(stepsDataMean)) {
+        if(is.na(stepsDataMean$steps[i])==TRUE) {
+                stepsDataMean$steps[i] <- stepsPerIntervalMean$steps[stepsPerIntervalMean$interval == stepsDataMean$interval[i]]
+        }
+}
+```
 
 
-
-## What is mean total number of steps taken per day?
-
-
-
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
-
+```{r, echo=TRUE}
+# generate histogram (graphical representation of the distribution of data) of the total number of steps taken each day
+stepsPerDay <- aggregate(steps ~ date, data=stepsDataMean, sum)
+plot2 = ggplot(data=stepsPerDay, aes(x=steps)) 
+plot2 = plot2 + geom_histogram(colour="darkblue", fill="lightblue", binwidth=2000)
+plot2 = plot2 + ggtitle("Frequency of the Total Number of Steps Taken Each Day (Replacing NA with interval mean")
+plot2 = plot2 + theme(plot.title = element_text(face="bold"))
+plot2
+```
 
 
-## Are there differences in activity patterns between weekdays and weekends?
+A quick comparison of the two histograms, the first with the NAs, the second without the NAs and the mean for that time interval instead.
+
+```{r, echo=TRUE}
+library(gridExtra)
+grid.arrange(plot1, plot2)
+```
+
+The removeal of the datapoints narrows the distribution as represented by the mean and standard deviation.
+
+```{r, echo=TRUE}
+# calculate the mean/median total number of steps taken per day
+stepsPerDayMeanNAsRemoved <- round(mean(stepsPerDay$steps))
+stepsPerDaySDNAsRemoved <- round(sd(stepsPerDay$steps))
+stepsPerDayMedianNAsRemoved <- round(median(stepsPerDay$steps))
+```
+
+Recall, the mean value for steps per day is `r stepsPerDayMean` with a standard deviation of `r stepsPerDaySD` for the dataset with NAs. After the replacements of the NAs, the mean value for steps per day is `r stepsPerDayMeanNAsRemoved` with a standard deviation of `r stepsPerDaySDNAsRemoved`. The median value is `r stepsPerDayMedianNAsRemoved`.
+
+Does this individual display different behaviours during the week than on the weekend? 
+
+```{r, echo=TRUE}
+# create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given data is a weekday or weekend day
+# opting to the mean as the imputation of choice
+stepsDataMean$day <- weekdays(as.Date(stepsDataMean$date))
+stepsDataMean$dayClassification <- ifelse(stepsDataMean$day=="Saturday" | stepsDataMean$day=="Sunday", "weekend", "weekday")
+
+stepsPerIntervalMeanWeekday <- aggregate(steps ~ interval, data=subset(stepsDataMean,dayClassification=="weekday"), mean)
+stepsPerIntervalMeanWeekend <- aggregate(steps ~ interval, data=subset(stepsDataMean,dayClassification=="weekend"), mean)
+```
+
+
+```{r, echo=TRUE}
+plotWeekday = ggplot(data=stepsPerIntervalMeanWeekday, aes(x=interval,y=steps)) 
+plotWeekday = plotWeekday + geom_line(colour="darkblue")
+plotWeekday = plotWeekday + ggtitle("Weekday Mean Steps Per Interval")
+plotWeekday = plotWeekday + theme(plot.title = element_text(face="bold"))
+
+plotWeekend = ggplot(data=stepsPerIntervalMeanWeekend, aes(x=interval,y=steps)) 
+plotWeekend = plotWeekend + geom_line(colour="darkblue")
+plotWeekend = plotWeekend + ggtitle("Weekend Mean Steps Per Interval")
+plotWeekend = plotWeekend + theme(plot.title = element_text(face="bold"))
+
+grid.arrange(plotWeekday, plotWeekend)
+```
+
+Most certainly yes. The steps start and end later in the day. 
